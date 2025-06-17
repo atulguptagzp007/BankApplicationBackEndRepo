@@ -186,10 +186,14 @@ class CustomerController {
                 });
             }
 
+            console.log('Processing file:', req.file.path); // Debug log
+
             const workbook = XLSX.readFile(req.file.path);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const data = XLSX.utils.sheet_to_json(worksheet);
+
+            console.log('Excel data:', data); // Debug log
 
             let importedCount = 0;
             let errors = [];
@@ -218,8 +222,8 @@ class CustomerController {
                         const date = new Date((sanctionDate - 25569) * 86400 * 1000);
                         sanctionDate = date.toISOString().split('T')[0];
                     } else if (typeof sanctionDate === 'string') {
-                        // Handle DD/MM/YYYY format
-                        const parts = sanctionDate.split('/');
+                        // Handle DD/MM/YYYY or DD-MM-YYYY format
+                        const parts = sanctionDate.split(/[-/]/);
                         if (parts.length === 3) {
                             sanctionDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                         }
@@ -231,12 +235,14 @@ class CustomerController {
                             const date = new Date((npaDate - 25569) * 86400 * 1000);
                             npaDate = date.toISOString().split('T')[0];
                         } else if (typeof npaDate === 'string') {
-                            const parts = npaDate.split('/');
+                            const parts = npaDate.split(/[-/]/);
                             if (parts.length === 3) {
                                 npaDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                             }
                         }
                     }
+
+                    console.log('Processing row:', { ...row, sanctionDate, npaDate }); // Debug log
 
                     // Create customer
                     await Customer.create({
@@ -251,12 +257,17 @@ class CustomerController {
 
                     importedCount++;
                 } catch (error) {
+                    console.error('Error processing row:', error); // Debug log
                     errors.push(`Row ${importedCount + 1}: ${error.message}`);
                 }
             }
 
             // Clean up uploaded file
-            fs.unlinkSync(req.file.path);
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (error) {
+                console.error('Error deleting file:', error);
+            }
 
             res.status(200).json({
                 message: 'Import completed',
@@ -268,7 +279,8 @@ class CustomerController {
             console.error('Error importing customers:', error);
             res.status(500).json({
                 error: error.message,
-                message: 'Error importing customers'
+                message: 'Error importing customers',
+                details: error.stack
             });
         }
     }
