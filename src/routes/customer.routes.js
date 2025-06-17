@@ -3,16 +3,11 @@ const router = express.Router();
 const CustomerController = require('../controllers/customer.controller');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs'); // Import fs module
 
 // Configure multer for file upload
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
-});
+// Change to memory storage for ephemeral environments like Railway
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,

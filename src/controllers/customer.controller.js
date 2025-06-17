@@ -180,11 +180,11 @@ class CustomerController {
 
     static async importCustomers(req, res) {
         try {
-            // Ensure the uploads directory exists
-            const uploadDir = path.join(__dirname, '../../uploads');
-            if (!fs.existsSync(uploadDir)) {
-                fs.mkdirSync(uploadDir, { recursive: true });
-            }
+            // The uploads directory is no longer needed with memory storage
+            // const uploadDir = path.join(__dirname, '../../uploads');
+            // if (!fs.existsSync(uploadDir)) {
+            //     fs.mkdirSync(uploadDir, { recursive: true });
+            // }
 
             if (!req.file) {
                 return res.status(400).json({
@@ -193,9 +193,9 @@ class CustomerController {
                 });
             }
 
-            console.log('Processing file:', req.file.path); // Debug log
-
-            const workbook = XLSX.readFile(req.file.path);
+            // Read the Excel file directly from buffer
+            console.log('Processing file from memory buffer.'); // Debug log
+            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const data = XLSX.utils.sheet_to_json(worksheet);
@@ -229,7 +229,7 @@ class CustomerController {
                         const date = new Date((sanctionDate - 25569) * 86400 * 1000);
                         sanctionDate = date.toISOString().split('T')[0];
                     } else if (typeof sanctionDate === 'string') {
-                        // Handle DD/MM/YYYY or DD-MM-YYYY format
+                        // Handle DD/MM/YYYY or DD-MM/YYYY format
                         const parts = sanctionDate.split(/[-/]/);
                         if (parts.length === 3) {
                             sanctionDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
@@ -269,12 +269,12 @@ class CustomerController {
                 }
             }
 
-            // Clean up uploaded file
-            try {
-                fs.unlinkSync(req.file.path);
-            } catch (error) {
-                console.error('Error deleting file:', error);
-            }
+            // File deletion no longer needed with memory storage
+            // try {
+            //     fs.unlinkSync(req.file.path);
+            // } catch (error) {
+            //     console.error('Error deleting file:', error);
+            // }
 
             res.status(200).json({
                 message: 'Import completed',
