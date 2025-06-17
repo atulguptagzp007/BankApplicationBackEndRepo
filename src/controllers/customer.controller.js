@@ -1,6 +1,7 @@
 const Customer = require('../models/customer.model');
 const XLSX = require('xlsx');
 const fs = require('fs');
+const path = require('path');
 
 class CustomerController {
     static async getAllCustomers(req, res) {
@@ -179,6 +180,12 @@ class CustomerController {
 
     static async importCustomers(req, res) {
         try {
+            // Ensure the uploads directory exists
+            const uploadDir = path.join(__dirname, '../../uploads');
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+
             if (!req.file) {
                 return res.status(400).json({
                     error: 'No file uploaded',
@@ -277,7 +284,7 @@ class CustomerController {
             });
         } catch (error) {
             console.error('Error importing customers:', error);
-            res.status(500).json({ 
+            res.status(500).json({
                 error: error.message,
                 message: 'Error importing customers',
                 details: error.stack
