@@ -13,11 +13,24 @@ class Customer {
                     address TEXT NOT NULL,
                     sanction_amt DECIMAL(15,2) NOT NULL,
                     sanction_date DATE NOT NULL,
-                    npa_date DATE,
-                    comment TEXT
+                    npa_date DATE
                 )
             `);
-            console.log('Database and table initialized successfully');
+
+            await db.query(`
+                CREATE TABLE IF NOT EXISTS customer_comments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    account_no VARCHAR(20) NOT NULL,
+                    comment TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (account_no) REFERENCES customer_details(account_no) ON DELETE CASCADE
+                )
+            `);
+
+            // Set timezone to IST
+            await db.query('SET time_zone = "+05:30"');
+            console.log('Database and tables initialized successfully');
         } catch (error) {
             console.error('Error initializing database:', error);
             throw error;
@@ -37,16 +50,15 @@ class Customer {
         try {
             const [result] = await db.query(
                 `INSERT INTO customer_details 
-                (account_no, name, address, sanction_amt, sanction_date, npa_date, comment) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                (account_no, name, address, sanction_amt, sanction_date, npa_date) 
+                VALUES (?, ?, ?, ?, ?, ?)`,
                 [
                     customerData.account_no,
                     customerData.name,
                     customerData.address,
                     customerData.sanction_amt,
                     customerData.sanction_date,
-                    customerData.npa_date || null,
-                    customerData.comment || null
+                    customerData.npa_date || null
                 ]
             );
             return result.insertId;
@@ -67,11 +79,47 @@ class Customer {
         }
     }
 
-    static async updateComment(accountNo, comment) {
+    static async getComments(accountNo) {
+        try {
+            const [rows] = await db.query(
+                'SELECT * FROM customer_comments WHERE account_no = ? ORDER BY created_at DESC',
+                [accountNo]
+            );
+            return rows;
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    static async addComment(accountNo, comment) {
         try {
             const [result] = await db.query(
-                'UPDATE customer_details SET comment = ? WHERE account_no = ?',
-                [comment, accountNo]
+                'INSERT INTO customer_comments (account_no, comment) VALUES (?, ?)',
+                [accountNo, comment]
+            );
+            return result.insertId;
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    static async updateComment(commentId, comment) {
+        try {
+            const [result] = await db.query(
+                'UPDATE customer_comments SET comment = ? WHERE id = ?',
+                [comment, commentId]
+            );
+            return result.affectedRows > 0;
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    static async deleteComment(commentId) {
+        try {
+            const [result] = await db.query(
+                'DELETE FROM customer_comments WHERE id = ?',
+                [commentId]
             );
             return result.affectedRows > 0;
         } catch (error) {
@@ -80,40 +128,67 @@ class Customer {
     }
 
     static async delete(accountNo) {
+        const connection = await db.getConnection();
         try {
-            console.log('Attempting to delete customer:', accountNo);
-            
-            // First check if customer exists
-            const checkResult = await db.query(
-                'SELECT * FROM customer_details WHERE account_no = ?',
+            await connection.beginTransaction();
+
+            // First verify the customer exists
+            const [customer] = await connection.query(
+                'SELECT account_no FROM customer_details WHERE account_no = ?',
                 [accountNo]
             );
-    
-            if (checkResult[0].length === 0) {
-                console.log('Customer not found');
-                return null;
+            
+            if (!customer || customer.length === 0) {
+                await connection.rollback();
+                throw new Error('Customer not found');
             }
-    
-            // Store customer data before deletion
-            const customerToDelete = checkResult[0][0];
-    
-            // Execute deletion
-            const deleteResult = await db.query(
+
+            // Delete all comments for this customer
+            await connection.query(
+                'DELETE FROM customer_comments WHERE account_no = ?',
+                [accountNo]
+            );
+
+            // Delete the customer
+            const [result] = await connection.query(
                 'DELETE FROM customer_details WHERE account_no = ?',
                 [accountNo]
             );
-    
-            console.log('Delete affected rows:', deleteResult[0].affectedRows);
             
-            if (deleteResult[0].affectedRows === 0) {
-                console.warn('No rows were deleted');
-                return null;
+            if (result.affectedRows === 0) {
+                await connection.rollback();
+                throw new Error('Failed to delete customer');
             }
-    
-            return customerToDelete;
+
+            await connection.commit();
+            return result;
         } catch (error) {
-            console.error('Error in Customer.delete:', error);
-            throw error;
+            await connection.rollback();
+            console.error('Error in delete:', error);
+            throw new Error('Failed to delete customer: ' + error.message);
+        } finally {
+            connection.release();
+        }
+    }
+
+    static async deleteAllComments(accountNo) {
+        try {
+            // First verify the customer exists
+            const customerQuery = 'SELECT account_no FROM customer_details WHERE account_no = ?';
+            const [customer] = await db.query(customerQuery, [accountNo]);
+            
+            if (!customer || customer.length === 0) {
+                throw new Error('Customer not found');
+            }
+
+            // Delete all comments for the customer
+            const deleteQuery = 'DELETE FROM customer_comments WHERE account_no = ?';
+            const [result] = await db.query(deleteQuery, [accountNo]);
+            
+            return result;
+        } catch (error) {
+            console.error('Error in deleteAllComments:', error);
+            throw new Error('Failed to delete comments: ' + error.message);
         }
     }
 }
