@@ -277,7 +277,7 @@ class CustomerController {
             });
         } catch (error) {
             console.error('Error importing customers:', error);
-            res.status(500).json({
+            res.status(500).json({ 
                 error: error.message,
                 message: 'Error importing customers',
                 details: error.stack
